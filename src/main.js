@@ -10,7 +10,7 @@ import {
 import {
   GLTFLoader
 } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Vector3 } from 'three';
+import { Vector2, Vector3 } from 'three';
 
 // Example of hard link to official repo for data, if needed
 // const MODEL_PATH = 'https://raw.githubusercontent.com/mrdoob/three.js/r148/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
@@ -18,19 +18,13 @@ import { Vector3 } from 'three';
 
 // INSERT CODE HERE
 var camera, scene, renderer, vehicle, goal, keys, route, voiture;
+var entityManager = new YUKA.EntityManager();
 let initOK = false;
 
-var time = 0;
-var newPosition = new THREE.Vector3();
-var matrix = new THREE.Matrix4();
-
-var stop = 1;
-var DEGTORAD = 0.01745327;
-var temp = new THREE.Vector3;
 var dir = new THREE.Vector3;
 var a = new THREE.Vector3;
 var b = new THREE.Vector3;
-var coronaSafetyDistance = 5;
+var coronaSafetyDistance = 10;
 var velocity = 0.0;
 var speed = 0.0;
 
@@ -39,8 +33,16 @@ animate();
 
 function init() {
 
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 10);
-  camera.position.set(0, 3.3, 0);
+  const nbVoiture = 4;
+  const voituresPositions = [
+    new Vector3(5, 0, 0),
+    new Vector3(10, 0, 0),
+    new Vector3(-5, 0, 0),
+    new Vector3(-10, 0, 0)
+  ];
+
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+  camera.position.set(0, 4.0, 0);
 
   scene = new THREE.Scene();
   camera.lookAt(scene.position);
@@ -76,8 +78,6 @@ function init() {
 
   scene.add(route);
 
-  vehicle = new YUKA.Vehicle(); /// ?
-
   function sync(entity, renderComponent) {
     renderComponent.matrix.copy(entity.worldMatrix);
   }
@@ -94,53 +94,70 @@ function init() {
 
   path.loop = true;
 
-  //vehicle.position.copy(path.current());
 
-  vehicle.maxSpeed = 5;
+  const loader = new GLTFLoader().setPath('assets/models/');
 
-  const followPathBehavior = new YUKA.FollowPathBehavior(path, 3);
-  //vehicle.steering.add(followPathBehavior);
-
-  const onPathBehavior = new YUKA.OnPathBehavior(path);
-  //onPathBehavior.radius = 2;
-  //vehicle.steering.add(onPathBehavior);
-
-  const entityManager = new YUKA.EntityManager();
-  //entityManager.add(vehicle);
-
-  function loadData(fileName, coord) {
-    new GLTFLoader()
-      .setPath('assets/models/')
-      .load(fileName, function (gltf) {
-        voiture = gltf.scene;//.children[0];
-
-        if (voiture != null) {
-          console.log("Model loaded:  " + voiture);
-          voiture.matrixAutoUpdate = true;
-          console.log(voiture);
-          //voiture.position.set(10, 0, 0);
-          //voiture.scale = new THREE.Vector3(20, 2, 2);
-          scene.add(voiture);
-          console.log(voiture);
-
-          initOK = true;
-          /*
-          vehicle.scale = new YUKA.Vector3(0.2, 0.2, 0.2);
-          vehicle.setRenderComponent(model, sync);*/
-
-        }
-        else {
-          console.log("Load FAILED.");
-        }
-      });
+  function modelLoader(fileName) {
+    return new Promise((resolve, reject) => {
+      loader.load(fileName, data => resolve(data), null, reject);
+    });
   }
-  /////faire pas un vehicule yuka mais un objet normal 
 
+  async function loadData(fileName, coord, scale) {
+    const gltf = await modelLoader(fileName);
 
-  loadData('voiture.glb', new Vector3(0, 0, 0));
-  //loadData('voiture.glb', new Vector3(1, 0, 1));
+    let objet = gltf.scene;
+    objet.matrixAutoUpdate = true;
+    objet.position.set(coord.x, coord.y, coord.z);
+    objet.scale.set(scale.x, scale.y, scale.z);
+
+    scene.add(objet);
+
+    return objet;
+  }
+
+  loadData('voiture.glb', new Vector3(0, 0, 0), new Vector3(1, 1, 1))
+    .catch(error => {
+      console.error(error);
+    })
+    .then((objet) => {
+      voiture = objet;
+    });
+
+  for (let i = 0; i < nbVoiture; i++) {
+    console.log(i);
+    loadData('voiture.glb', voituresPositions[i], new Vector3(1, 1, 1))
+      .catch(error => {
+        console.error(error);
+      })
+      .then((objet) => {
+        let vehicle = new YUKA.Vehicle();
+
+        vehicle.position.copy(path.current());
+
+        vehicle.maxSpeed = 5;
+
+        const followPathBehavior = new YUKA.FollowPathBehavior(path, 3);
+        vehicle.steering.add(followPathBehavior);
+
+        const onPathBehavior = new YUKA.OnPathBehavior(path);
+        onPathBehavior.radius = 2;
+        vehicle.steering.add(onPathBehavior);
+
+        vehicle.setRenderComponent(objet, sync);
+
+        const entityManager = new YUKA.EntityManager();
+        entityManager.add(vehicle);
+
+        if (i == nbVoiture - 1) {
+          initOK = true
+        }
+
+      })
+  }
 
   const positions = [];
+
   for (let i = 0; i < path._waypoints.length; i++) {
     const point = path._waypoints[i];
     positions.push(point.x, point.y, point.z);
@@ -173,18 +190,11 @@ function init() {
       keys[key] = false;
 
   });
-
-  //route.position.set(0, 0, -5);
-
-  //camera.position.set(vehicle.position.x + 2, vehicle.position.y + 2, vehicle.position.z + 2);
-  console.log(voiture);
 }
 
+const time = new YUKA.Time();
 
 function animate() {
-
-
-  //console.log(voiture.position);
 
   requestAnimationFrame(animate);
 
@@ -192,21 +202,23 @@ function animate() {
     return;
   }
 
+  const delta = time.update().getDelta();
+  entityManager.update(delta);
+
   speed = 0.0;
 
-
   if (keys.w)
-    speed = 0.05;
+    speed = 0.1;
   else if (keys.s)
-    speed = -0.05;
+    speed = -0.1;
 
   velocity += (speed - velocity) * .3;
   voiture.translateZ(velocity);
 
   if (keys.a)
-    voiture.rotateY(0.01);
+    voiture.rotateY(0.02);
   else if (keys.d)
-    voiture.rotateY(-0.01);
+    voiture.rotateY(-0.02);
 
 
   a.lerp(voiture.position, 1.9);

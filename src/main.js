@@ -17,9 +17,10 @@ import { Vector2, Vector3 } from 'three';
 
 
 // INSERT CODE HERE
-var camera, scene, renderer, vehicle, goal, keys, route, voiture;
+var camera, scene, renderer, goal, keys, route, voiture;
 var entityManager = new YUKA.EntityManager();
-let initOK = false;
+let nbVoitureCree = 0;
+
 
 var dir = new THREE.Vector3;
 var a = new THREE.Vector3;
@@ -28,12 +29,19 @@ var coronaSafetyDistance = 10;
 var velocity = 0.0;
 var speed = 0.0;
 
+const time = new YUKA.Time();
+const positions1 = [];
+const positions2 = [];
+const positions3 = [];
+const positions4 = [];
+
 init();
 animate();
 
 function init() {
 
   const nbVoiture = 4;
+
   const voituresPositions = [
     new Vector3(5, 0, 0),
     new Vector3(10, 0, 0),
@@ -61,8 +69,8 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  //const controls = new OrbitControls(camera, renderer.domElement);
-  //controls.listenToKeyEvents(window); // optional
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.listenToKeyEvents(window); // optional
 
   const ambientLight = new THREE.AmbientLight(0x333333);
   scene.add(ambientLight);
@@ -79,20 +87,104 @@ function init() {
   scene.add(route);
 
   function sync(entity, renderComponent) {
+    console.log("____test____");
     renderComponent.matrix.copy(entity.worldMatrix);
   }
 
-  const path = new YUKA.Path();
-  path.add(new YUKA.Vector3(-16, 0, 4));
-  path.add(new YUKA.Vector3(-12, 0, 0));
-  path.add(new YUKA.Vector3(-6, 0, -12));
-  path.add(new YUKA.Vector3(0, 0, 0));
-  path.add(new YUKA.Vector3(8, 0, -8));
-  path.add(new YUKA.Vector3(10, 0, 0));
-  path.add(new YUKA.Vector3(4, 0, 4));
-  path.add(new YUKA.Vector3(0, 0, 6));
+  let paths = [];
 
-  path.loop = true;
+  const path1 = new YUKA.Path();
+  path1.add(new YUKA.Vector3(-16, 0, 4));
+  path1.add(new YUKA.Vector3(-12, 0, 0));
+  path1.add(new YUKA.Vector3(-6, 0, -12));
+  path1.add(new YUKA.Vector3(0, 0, 0));
+  path1.add(new YUKA.Vector3(8, 0, -8));
+  path1.add(new YUKA.Vector3(10, 0, 0));
+  path1.add(new YUKA.Vector3(4, 0, 4));
+  path1.add(new YUKA.Vector3(0, 0, 6));
+
+  const path2 = new YUKA.Path();
+  path2.add(new YUKA.Vector3(-9, 0, -8));
+  path2.add(new YUKA.Vector3(12, 0, 0));
+  path2.add(new YUKA.Vector3(-6, 0, 12));
+  path2.add(new YUKA.Vector3(0, 0, 0));
+  path2.add(new YUKA.Vector3(-8, 0, -8));
+  path2.add(new YUKA.Vector3(-10, 0, 0));
+  path2.add(new YUKA.Vector3(4, 0, -4));
+  path2.add(new YUKA.Vector3(10, 0, 6));
+
+  const path3 = new YUKA.Path();
+  path3.add(new YUKA.Vector3(-6, 0, 4));
+  path3.add(new YUKA.Vector3(-2, 0, 10));
+  path3.add(new YUKA.Vector3(-6, 0, -2));
+  path3.add(new YUKA.Vector3(10, 0, 10));
+  path3.add(new YUKA.Vector3(8, 0, -8));
+  path3.add(new YUKA.Vector3(0, 0, 10));
+  path3.add(new YUKA.Vector3(4, 0, 4));
+  path3.add(new YUKA.Vector3(10, 0, 6));
+
+  const path4 = new YUKA.Path();
+  path4.add(new YUKA.Vector3(-16, 0, 14));
+  path4.add(new YUKA.Vector3(-12, 0, 0));
+  path4.add(new YUKA.Vector3(-16, 0, -1));
+  path4.add(new YUKA.Vector3(0, 0, 0));
+  path4.add(new YUKA.Vector3(8, 0, -8));
+  path4.add(new YUKA.Vector3(10, 0, 0));
+  path4.add(new YUKA.Vector3(4, 0, 14));
+  path4.add(new YUKA.Vector3(0, 0, 16));
+
+  paths.push(path1);
+  paths.push(path2);
+  paths.push(path3);
+  paths.push(path4);
+
+  path1.loop = true;
+  path2.loop = true;
+  path3.loop = true;
+  path4.loop = true;
+
+
+  for (let i = 0; i < path1._waypoints.length; i++) {
+    const point = path1._waypoints[i];
+    positions1.push(point.x, point.y, point.z);
+  }
+  for (let i = 0; i < path2._waypoints.length; i++) {
+    const point = path2._waypoints[i];
+    positions2.push(point.x, point.y, point.z);
+  }
+  for (let i = 0; i < path3._waypoints.length; i++) {
+    const point = path3._waypoints[i];
+    positions3.push(point.x, point.y, point.z);
+  }
+  for (let i = 0; i < path4._waypoints.length; i++) {
+    const point = path4._waypoints[i];
+    positions4.push(point.x, point.y, point.z);
+  }
+
+  const positions = [positions1, positions2, positions2, positions4]
+
+  const lineGeometry1 = new THREE.BufferGeometry();
+  const lineGeometry2 = new THREE.BufferGeometry();
+  const lineGeometry3 = new THREE.BufferGeometry();
+  const lineGeometry4 = new THREE.BufferGeometry();
+
+  const lineGeometrys = [lineGeometry1, lineGeometry2, lineGeometry3, lineGeometry4]
+
+  for (let i = 0; i < 4; i++) {
+    lineGeometrys[i].setAttribute('position', new THREE.Float32BufferAttribute(positions[i], 3));
+  }
+
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xFFFFFF });
+
+  const lines1 = new THREE.LineLoop(lineGeometry1, lineMaterial);
+  const lines2 = new THREE.LineLoop(lineGeometry2, lineMaterial);
+  const lines3 = new THREE.LineLoop(lineGeometry3, lineMaterial);
+  const lines4 = new THREE.LineLoop(lineGeometry4, lineMaterial);
+
+  scene.add(lines1);
+  scene.add(lines2);
+  scene.add(lines3);
+  scene.add(lines4);
 
 
   const loader = new GLTFLoader().setPath('assets/models/');
@@ -107,7 +199,7 @@ function init() {
     const gltf = await modelLoader(fileName);
 
     let objet = gltf.scene;
-    objet.matrixAutoUpdate = true;
+    //objet.matrixAutoUpdate = true;
     objet.position.set(coord.x, coord.y, coord.z);
     objet.scale.set(scale.x, scale.y, scale.z);
 
@@ -122,53 +214,35 @@ function init() {
     })
     .then((objet) => {
       voiture = objet;
+      nbVoitureCree += 1;
     });
 
   for (let i = 0; i < nbVoiture; i++) {
-    console.log(i);
     loadData('voiture.glb', voituresPositions[i], new Vector3(1, 1, 1))
       .catch(error => {
         console.error(error);
       })
       .then((objet) => {
-        let vehicle = new YUKA.Vehicle();
+        var vehicle = new YUKA.Vehicle();
 
-        vehicle.position.copy(path.current());
+        vehicle.position.copy(paths[i].current());
 
         vehicle.maxSpeed = 5;
 
-        const followPathBehavior = new YUKA.FollowPathBehavior(path, 3);
+        const followPathBehavior = new YUKA.FollowPathBehavior(path1, 3);
         vehicle.steering.add(followPathBehavior);
 
-        const onPathBehavior = new YUKA.OnPathBehavior(path);
-        onPathBehavior.radius = 2;
+        const onPathBehavior = new YUKA.OnPathBehavior(path1);
+        //onPathBehavior.radius = 2;
         vehicle.steering.add(onPathBehavior);
 
-        vehicle.setRenderComponent(objet, sync);
-
-        const entityManager = new YUKA.EntityManager();
         entityManager.add(vehicle);
 
-        if (i == nbVoiture - 1) {
-          initOK = true
-        }
-
+        objet.matrixAutoUpdate = false;
+        vehicle.setRenderComponent(objet, sync);
+        nbVoitureCree += 1;
       })
   }
-
-  const positions = [];
-
-  for (let i = 0; i < path._waypoints.length; i++) {
-    const point = path._waypoints[i];
-    positions.push(point.x, point.y, point.z);
-  }
-
-  const lineGeometry = new THREE.BufferGeometry();
-  lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xFFFFFF });
-  const lines = new THREE.LineLoop(lineGeometry, lineMaterial);
-  scene.add(lines);
 
   keys = {
     a: false,
@@ -192,18 +266,18 @@ function init() {
   });
 }
 
-const time = new YUKA.Time();
 
 function animate() {
 
   requestAnimationFrame(animate);
 
-  if (!initOK) {
+  if (nbVoitureCree < 5) {
     return;
   }
 
   const delta = time.update().getDelta();
   entityManager.update(delta);
+  //console.log(delta);
 
   speed = 0.0;
 

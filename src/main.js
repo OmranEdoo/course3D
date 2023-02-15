@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import * as YUKA from 'yuka';
+import * as CANNON from 'cannon-es'
 
 // NOTE: three/addons alias or importmap does not seem to be supported by Parcel, use three/examples/jsm/ instead 
 
@@ -20,7 +21,11 @@ import { Vector2, Vector3 } from 'three';
 var camera, scene, renderer, goal, keys, route, voiture;
 var entityManager = new YUKA.EntityManager();
 let nbVoitureCree = 0;
+let voitures = [];
 
+const world = new CANNON.World({
+  gravity: new CANNON.Vec3(0, -9.82, 0), // m/s²
+})
 
 var dir = new THREE.Vector3;
 var a = new THREE.Vector3;
@@ -39,7 +44,7 @@ init();
 animate();
 
 function init() {
-
+  
   const nbVoiture = 4;
 
   const voituresPositions = [
@@ -87,61 +92,43 @@ function init() {
   scene.add(route);
 
   function sync(entity, renderComponent) {
-    console.log("____test____");
+    //console.log("____test____");
     renderComponent.matrix.copy(entity.worldMatrix);
   }
 
   let paths = [];
 
   const path1 = new YUKA.Path();
-  path1.add(new YUKA.Vector3(-16, 0, 4));
-  path1.add(new YUKA.Vector3(-12, 0, 0));
-  path1.add(new YUKA.Vector3(-6, 0, -12));
+  path1.add(new YUKA.Vector3(50, 0, 0));
   path1.add(new YUKA.Vector3(0, 0, 0));
-  path1.add(new YUKA.Vector3(8, 0, -8));
-  path1.add(new YUKA.Vector3(10, 0, 0));
-  path1.add(new YUKA.Vector3(4, 0, 4));
-  path1.add(new YUKA.Vector3(0, 0, 6));
+  path1.add(new YUKA.Vector3(0, 0, 50));
 
   const path2 = new YUKA.Path();
-  path2.add(new YUKA.Vector3(-9, 0, -8));
-  path2.add(new YUKA.Vector3(12, 0, 0));
-  path2.add(new YUKA.Vector3(-6, 0, 12));
-  path2.add(new YUKA.Vector3(0, 0, 0));
-  path2.add(new YUKA.Vector3(-8, 0, -8));
-  path2.add(new YUKA.Vector3(-10, 0, 0));
-  path2.add(new YUKA.Vector3(4, 0, -4));
-  path2.add(new YUKA.Vector3(10, 0, 6));
+  path2.add(new YUKA.Vector3(-50, 0, -25));
+  path2.add(new YUKA.Vector3(20, 0, 10));
+  path2.add(new YUKA.Vector3(40, 0, 40));
 
   const path3 = new YUKA.Path();
-  path3.add(new YUKA.Vector3(-6, 0, 4));
-  path3.add(new YUKA.Vector3(-2, 0, 10));
-  path3.add(new YUKA.Vector3(-6, 0, -2));
-  path3.add(new YUKA.Vector3(10, 0, 10));
-  path3.add(new YUKA.Vector3(8, 0, -8));
-  path3.add(new YUKA.Vector3(0, 0, 10));
-  path3.add(new YUKA.Vector3(4, 0, 4));
-  path3.add(new YUKA.Vector3(10, 0, 6));
+  path3.add(new YUKA.Vector3(40, 0, -40));
+  path3.add(new YUKA.Vector3(-20, 0, -10));
+  path3.add(new YUKA.Vector3(5, 0, 40));
 
   const path4 = new YUKA.Path();
-  path4.add(new YUKA.Vector3(-16, 0, 14));
-  path4.add(new YUKA.Vector3(-12, 0, 0));
-  path4.add(new YUKA.Vector3(-16, 0, -1));
-  path4.add(new YUKA.Vector3(0, 0, 0));
-  path4.add(new YUKA.Vector3(8, 0, -8));
-  path4.add(new YUKA.Vector3(10, 0, 0));
-  path4.add(new YUKA.Vector3(4, 0, 14));
-  path4.add(new YUKA.Vector3(0, 0, 16));
+  path4.add(new YUKA.Vector3(25, 0, 25));
+  path4.add(new YUKA.Vector3(-25, 0, 25));
+  path4.add(new YUKA.Vector3(-25, 0, -25));
+  path4.add(new YUKA.Vector3(25, 0, -25));
 
-  paths.push(path1);
-  paths.push(path2);
-  paths.push(path3);
-  paths.push(path4);
 
   path1.loop = true;
   path2.loop = true;
   path3.loop = true;
   path4.loop = true;
+
+  paths.push(path1);
+  paths.push(path2);
+  paths.push(path3);
+  paths.push(path4);
 
 
   for (let i = 0; i < path1._waypoints.length; i++) {
@@ -170,7 +157,7 @@ function init() {
 
   const lineGeometrys = [lineGeometry1, lineGeometry2, lineGeometry3, lineGeometry4]
 
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < nbVoiture; i++) {
     lineGeometrys[i].setAttribute('position', new THREE.Float32BufferAttribute(positions[i], 3));
   }
 
@@ -227,12 +214,12 @@ function init() {
 
         vehicle.position.copy(paths[i].current());
 
-        vehicle.maxSpeed = 5;
+        vehicle.maxSpeed = 7;
 
-        const followPathBehavior = new YUKA.FollowPathBehavior(path1, 3);
+        const followPathBehavior = new YUKA.FollowPathBehavior(paths[i], 10);
         vehicle.steering.add(followPathBehavior);
 
-        const onPathBehavior = new YUKA.OnPathBehavior(path1);
+        const onPathBehavior = new YUKA.OnPathBehavior(paths[i]);
         //onPathBehavior.radius = 2;
         vehicle.steering.add(onPathBehavior);
 
@@ -241,6 +228,7 @@ function init() {
         objet.matrixAutoUpdate = false;
         vehicle.setRenderComponent(objet, sync);
         nbVoitureCree += 1;
+        voitures.push(vehicle);
       })
   }
 
@@ -282,18 +270,19 @@ function animate() {
   speed = 0.0;
 
   if (keys.w)
-    speed = 0.1;
+    speed = 0.2;
   else if (keys.s)
-    speed = -0.1;
+    speed = -0.2;
 
   velocity += (speed - velocity) * .3;
   voiture.translateZ(velocity);
 
   if (keys.a)
-    voiture.rotateY(0.02);
+    voiture.rotateY(0.04);
   else if (keys.d)
-    voiture.rotateY(-0.02);
+    voiture.rotateY(-0.04);
 
+  //detectCollision(voiture);
 
   a.lerp(voiture.position, 1.9);
   b.copy(goal.position);
@@ -306,6 +295,7 @@ function animate() {
   //camera.position.lerp(temp, 0.2);
   camera.lookAt(voiture.position);
 
+  world.fixedStep();
 
   renderer.render(scene, camera);
 }

@@ -11,17 +11,18 @@ import {
 import {
   GLTFLoader
 } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Vector2, Vector3 } from 'three';
+import { Vector3 } from 'three';
 
 // Example of hard link to official repo for data, if needed
 // const MODEL_PATH = 'https://raw.githubusercontent.com/mrdoob/three.js/r148/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
 
 
 // INSERT CODE HERE
-var camera, scene, renderer, goal, keys, route, voiture;
+var camera, scene, renderer, goal, keys, route, voiture, voitureCannon, circuit;
 var entityManager = new YUKA.EntityManager();
-let nbVoitureCree = 0;
+let numberItemLoaded = 0;
 let voitures = [];
+let voituresCannon = [];
 
 const world = new CANNON.World({
   gravity: new CANNON.Vec3(0, -9.82, 0), // m/s²
@@ -40,12 +41,24 @@ const positions2 = [];
 const positions3 = [];
 const positions4 = [];
 
+let nbVoiture = 4;
+let nbItems = nbVoiture + 1;
+
+let axisX = new CANNON.Vec3(1, 0, 0);
+let axisY = new CANNON.Vec3(0, 1, 0);
+let axisZ = new CANNON.Vec3(0, 0, 1);
+
+let angle = 0.04;
+
+
+
+
 init();
 animate();
 
 function init() {
-  
-  const nbVoiture = 4;
+
+  const cubeShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
 
   const voituresPositions = [
     new Vector3(5, 0, 0),
@@ -67,6 +80,12 @@ function init() {
 
   var gridHelper = new THREE.GridHelper(100, 100);
   scene.add(gridHelper);
+
+  const planeShape = new CANNON.Plane();
+  const planeBody = new CANNON.Body({ mass: 0 });
+  planeBody.addShape(planeShape);
+  planeBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+  world.addBody(planeBody);
 
   scene.add(new THREE.AxesHelper());
 
@@ -182,7 +201,20 @@ function init() {
     });
   }
 
-  async function loadData(fileName, coord, scale) {
+  async function loadData(fileName, coord, scale, index) {
+    const gltf = await modelLoader(fileName);
+    //console.log(gltf.scene);
+    let objet = gltf.scene.children[index];
+    //objet.matrixAutoUpdate = true;
+    objet.position.set(coord.x, coord.y, coord.z);
+    objet.scale.set(scale.x, scale.y, scale.z);
+
+    scene.add(objet);
+
+    return objet;
+  }
+
+  async function loadFullData(fileName, coord, scale) {
     const gltf = await modelLoader(fileName);
 
     let objet = gltf.scene;
@@ -195,25 +227,39 @@ function init() {
     return objet;
   }
 
-  loadData('voiture.glb', new Vector3(0, 0, 0), new Vector3(1, 1, 1))
+  loadData('roads.glb', new Vector3(0, 0, 0), new Vector3(4, 4, 4), 0)
+    .catch(error => {
+      console.error(error);
+    })
+    .then((objet) => {
+      circuit = objet;
+      numberItemLoaded += 1;
+    });
+
+  loadFullData('voiture.glb', new Vector3(0, 10, 0), new Vector3(1, 1, 1))
     .catch(error => {
       console.error(error);
     })
     .then((objet) => {
       voiture = objet;
-      nbVoitureCree += 1;
+      voitureCannon = new CANNON.Body({ mass: 1 });
+      voitureCannon.addShape(cubeShape);
+      voitureCannon.position.x = voiture.position.x;
+      voitureCannon.position.y = voiture.position.y;
+      voitureCannon.position.z = voiture.position.z;
+      world.addBody(voitureCannon);
+
+      numberItemLoaded += 1;
     });
 
   for (let i = 0; i < nbVoiture; i++) {
-    loadData('voiture.glb', voituresPositions[i], new Vector3(1, 1, 1))
+    loadFullData('voiture.glb', voituresPositions[i], new Vector3(1, 1, 1))
       .catch(error => {
         console.error(error);
       })
       .then((objet) => {
         var vehicle = new YUKA.Vehicle();
-
         vehicle.position.copy(paths[i].current());
-
         vehicle.maxSpeed = 7;
 
         const followPathBehavior = new YUKA.FollowPathBehavior(paths[i], 10);
@@ -227,8 +273,17 @@ function init() {
 
         objet.matrixAutoUpdate = false;
         vehicle.setRenderComponent(objet, sync);
-        nbVoitureCree += 1;
+
+        let cubeBody = new CANNON.Body({ mass: 1 })
+        cubeBody.addShape(cubeShape)
+        cubeBody.position.x = vehicle.position.x
+        cubeBody.position.y = vehicle.position.y
+        cubeBody.position.z = vehicle.position.z
+        world.addBody(cubeBody)
+
+        numberItemLoaded += 1;
         voitures.push(vehicle);
+        voituresCannon.push(cubeBody);
       })
   }
 
@@ -259,13 +314,16 @@ function animate() {
 
   requestAnimationFrame(animate);
 
-  if (nbVoitureCree < 5) {
+  if (numberItemLoaded < 5) {
     return;
   }
 
   const delta = time.update().getDelta();
   entityManager.update(delta);
   //console.log(delta);
+
+  world.step(delta)
+
 
   speed = 0.0;
 
@@ -274,17 +332,35 @@ function animate() {
   else if (keys.s)
     speed = -0.2;
 
-  velocity += (speed - velocity) * .3;
-  voiture.translateZ(velocity);
+  velocity += (speed - velocity) * 1.3;
 
-  if (keys.a)
-    voiture.rotateY(0.04);
-  else if (keys.d)
-    voiture.rotateY(-0.04);
+  // supposons que votre body s'appelle "myBody"
+  var impulse = new CANNON.Vec3(0, 0, velocity);
+  var point = new CANNON.Vec3(0, 0, 0);
+  voitureCannon.applyImpulse(impulse, point);
+
+
+  //voiture.translateZ(velocity);
+
+  //voitureCannon.z += 1;
+
+  //voitureCannon.position.y += 0.5;
+  //console.log(voitureCannon.position.z);
+
+  //console.log(voitureCannon.quaternion.y);
+
+  if (keys.a) {
+    voitureCannon.quaternion.setFromAxisAngle(axisY, voitureCannon.quaternion.y + angle);
+    //voiture.rotateY(0.04);
+  }
+  else if (keys.d) {
+    voitureCannon.quaternion.setFromAxisAngle(axisY, voitureCannon.quaternion.y - angle);
+    //voiture.rotateY(-0.04);
+  }
 
   //detectCollision(voiture);
 
-  a.lerp(voiture.position, 1.9);
+  a.lerp(voitureCannon.position, 1.9);
   b.copy(goal.position);
 
   dir.copy(a).sub(b).normalize();
@@ -294,6 +370,33 @@ function animate() {
 
   //camera.position.lerp(temp, 0.2);
   camera.lookAt(voiture.position);
+
+  // Copy coordinates from Cannon to Three.js
+  voiture.position.set(
+    voitureCannon.position.x,
+    voitureCannon.position.y,
+    voitureCannon.position.z
+  )
+  voiture.quaternion.set(
+    voitureCannon.quaternion.x,
+    voitureCannon.quaternion.y,
+    voitureCannon.quaternion.z,
+    voitureCannon.quaternion.w
+  )
+  /*
+  for (let i = 0; i < nbVoiture; i++) {
+    voitures[i].position.set(
+      voituresCannon[i].position.x,
+      voituresCannon[i].position.y,
+      voituresCannon[i].position.z
+    )
+      voitures[i].quaternion.set(
+        voituresCannon[i].quaternion.x,
+        voituresCannon[i].quaternion.y,
+        voituresCannon[i].quaternion.z,
+        voituresCannon[i].quaternion.w
+      )
+  }*/
 
   world.fixedStep();
 

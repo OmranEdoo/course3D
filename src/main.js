@@ -18,6 +18,7 @@ class Main {
     this.debug = true;
     this.debugPhysics = true;
     this.fixedTimeStep = 1.0 / 60.0;
+    this.time = new YUKA.Time();
 
     this.container = document.createElement('div');
     this.container.style.height = '100%';
@@ -34,6 +35,209 @@ class Main {
       console.error(JSON.stringify(error));
     }
   }
+
+  modelLoader(fileName) {
+    return new Promise((resolve, reject) => {
+      this.loader.load(fileName, data => resolve(data), null, reject);
+    });
+  }
+
+  async loadData(fileName, coord, scale, index) {
+    const gltf = await modelLoader(fileName);
+    let objet = gltf.scene.children[index];
+    objet.matrixAutoUpdate = true;
+    objet.position.set(coord.x, coord.y, coord.z);
+    objet.scale.set(scale.x, scale.y, scale.z);
+
+    scene.add(objet);
+
+    return objet;
+  }
+
+  async loadFullData(fileName, coord, scale) {
+    const gltf = await this.modelLoader(fileName);
+
+    let objet = gltf.scene;
+    objet.matrixAutoUpdate = true;
+    objet.position.set(coord.x, coord.y, coord.z);
+    objet.scale.set(scale.x, scale.y, scale.z);
+
+    this.scene.add(objet);
+
+    return objet;
+  }
+
+  createVehicle() {
+    let game = this;
+
+    const groundMaterial = new CANNON.Material("groundMaterial");
+    const wheelMaterial = new CANNON.Material("wheelMaterial");
+    const wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
+      friction: 1.0,
+      restitution: 0,
+      contactEquationStiffness: 1000
+    });
+
+    const chassisShape = new CANNON.Box(new CANNON.Vec3(1.4, 0.7, 2.8));
+    const chassisBody = new CANNON.Body({ mass: 150, material: groundMaterial });
+    chassisBody.addShape(chassisShape);
+    chassisBody.position.set(10, 4, 0);
+    this.helper.addVisual(chassisBody, 'car');
+
+    const options = {
+      radius: 0.5,
+      directionLocal: new CANNON.Vec3(0, -1, 0),
+      suspensionStiffness: 30,
+      suspensionRestLength: 0.3,
+      frictionSlip: 5,
+      dampingRelaxation: 2.3,
+      dampingCompression: 4.4,
+      maxSuspensionForce: 100000,
+      rollInfluence: 0.01,
+      axleLocal: new CANNON.Vec3(-1, 0, 0),
+      chassisConnectionPointLocal: new CANNON.Vec3(1, 1, 0),
+      maxSuspensionTravel: 0.3,
+      customSlidingRotationalSpeed: -30,
+      useCustomSlidingRotationalSpeed: true
+    };
+
+    // Create the vehicle
+    const vehicle = new CANNON.RaycastVehicle({
+      chassisBody: chassisBody,
+      indexRightAxis: 0,
+      indexUpAxis: 1,
+      indeForwardAxis: 2
+    });
+
+    options.chassisConnectionPointLocal.set(1, 0, -1);
+    vehicle.addWheel(options);
+
+    options.chassisConnectionPointLocal.set(-1, 0, -1);
+    vehicle.addWheel(options);
+
+    options.chassisConnectionPointLocal.set(1, 0, 1);
+    vehicle.addWheel(options);
+
+    options.chassisConnectionPointLocal.set(-1, 0, 1);
+    vehicle.addWheel(options);
+
+    vehicle.addToWorld(this.world);
+
+    const wheelBodies = [];
+    vehicle.wheelInfos.forEach(function (wheel) {
+      const cylinderShape = new CANNON.Cylinder(wheel.radius, wheel.radius, wheel.radius, 20);
+      const wheelBody = new CANNON.Body({ mass: 1, material: wheelMaterial });
+      const q = new CANNON.Quaternion();
+      q.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -Math.PI / 2);
+      wheelBody.addShape(cylinderShape, new CANNON.Vec3(), q);
+      wheelBodies.push(wheelBody);
+      game.helper.addVisual(wheelBody, 'wheel');
+    });
+
+    // Update wheels
+    this.world.addEventListener('postStep', function () {
+      let index = 0;
+      game.vehicle.wheelInfos.forEach(function (wheel) {
+        game.vehicle.updateWheelTransform(index);
+        const t = wheel.worldTransform;
+        wheelBodies[index].threemesh.position.copy(t.position);
+        wheelBodies[index].threemesh.quaternion.copy(t.quaternion);
+        index++;
+      });
+    });
+
+  }
+
+  initYuka() {
+    this.voituresPositions = [
+      new Vector3(5, 0, 0),
+      new Vector3(10, 0, 0),
+      new Vector3(-5, 0, 0),
+      new Vector3(-10, 0, 0)
+    ];
+
+    this.paths = [];
+
+    const path1 = new YUKA.Path();
+    path1.add(new YUKA.Vector3(50, 0, 0));
+    path1.add(new YUKA.Vector3(0, 0, 0));
+    path1.add(new YUKA.Vector3(0, 0, 50));
+
+    const path2 = new YUKA.Path();
+    path2.add(new YUKA.Vector3(-50, 0, -25));
+    path2.add(new YUKA.Vector3(20, 0, 10));
+    path2.add(new YUKA.Vector3(40, 0, 40));
+
+    const path3 = new YUKA.Path();
+    path3.add(new YUKA.Vector3(40, 0, -40));
+    path3.add(new YUKA.Vector3(-20, 0, -10));
+    path3.add(new YUKA.Vector3(5, 0, 40));
+
+    const path4 = new YUKA.Path();
+    path4.add(new YUKA.Vector3(25, 0, 25));
+    path4.add(new YUKA.Vector3(-25, 0, 25));
+    path4.add(new YUKA.Vector3(-25, 0, -25));
+    path4.add(new YUKA.Vector3(25, 0, -25));
+
+
+    path1.loop = true;
+    path2.loop = true;
+    path3.loop = true;
+    path4.loop = true;
+
+    this.paths.push(path1);
+    this.paths.push(path2);
+    this.paths.push(path3);
+    this.paths.push(path4);
+
+    const positions1 = [];
+    const positions2 = [];
+    const positions3 = [];
+    const positions4 = [];
+
+    for (let i = 0; i < path1._waypoints.length; i++) {
+      const point = path1._waypoints[i];
+      positions1.push(point.x, point.y, point.z);
+    }
+    for (let i = 0; i < path2._waypoints.length; i++) {
+      const point = path2._waypoints[i];
+      positions2.push(point.x, point.y, point.z);
+    }
+    for (let i = 0; i < path3._waypoints.length; i++) {
+      const point = path3._waypoints[i];
+      positions3.push(point.x, point.y, point.z);
+    }
+    for (let i = 0; i < path4._waypoints.length; i++) {
+      const point = path4._waypoints[i];
+      positions4.push(point.x, point.y, point.z);
+    }
+
+    const positions = [positions1, positions2, positions2, positions4]
+
+    const lineGeometry1 = new THREE.BufferGeometry();
+    const lineGeometry2 = new THREE.BufferGeometry();
+    const lineGeometry3 = new THREE.BufferGeometry();
+    const lineGeometry4 = new THREE.BufferGeometry();
+
+    const lineGeometrys = [lineGeometry1, lineGeometry2, lineGeometry3, lineGeometry4]
+
+    for (let i = 0; i < this.nbVoiture; i++) {
+      lineGeometrys[i].setAttribute('position', new THREE.Float32BufferAttribute(positions[i], 3));
+    }
+
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xFFFFFF });
+
+    const lines1 = new THREE.LineLoop(lineGeometry1, lineMaterial);
+    const lines2 = new THREE.LineLoop(lineGeometry2, lineMaterial);
+    const lines3 = new THREE.LineLoop(lineGeometry3, lineMaterial);
+    const lines4 = new THREE.LineLoop(lineGeometry4, lineMaterial);
+
+    this.scene.add(lines1);
+    this.scene.add(lines2);
+    this.scene.add(lines3);
+    this.scene.add(lines4);
+  }
+
 
   init() {
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
@@ -56,18 +260,64 @@ class Main {
 
     window.addEventListener('resize', function () { this.onWindowResize(); }, false);
 
-    // stats
-    if (this.debug) {
-      //this.stats = new STATS.Stats();
-      //this.container.appendChild(this.stats.dom);
+    this.voiture = null;
+    this.numberItemLoaded = 0;
+    this.nbObject = 3;
+    this.nbVoiture = 2;
+    this.loader = new GLTFLoader().setPath('assets/models/');
+    this.entityManager = new YUKA.EntityManager();
+
+    this.initYuka();
+    
+    this.initPhysics();
+
+    function sync(entity, renderComponent) {
+      //console.log("____test____");
+      renderComponent.matrix.copy(entity.worldMatrix);
     }
+
+    this.loadFullData('voiture.glb', new Vector3(0, 0, 0), new Vector3(1.5, 1.5, 1.5))
+      .catch(error => {
+        console.error(error);
+      })
+      .then((objet) => {
+        this.voiture = objet;
+
+        this.numberItemLoaded += 1;
+      });
 
     this.joystick = new JoyStick({
       game: this,
       onMove: this.joystickCallback
     });
 
-    this.initPhysics();
+    for (let i = 0; i < this.nbVoiture; i++) {
+      this.loadFullData('voiture.glb', this.voituresPositions[i], new Vector3(1, 1, 1))
+        .catch(error => {
+          console.error(error);
+        })
+        .then((objet) => {
+          const voitureAutonome = new YUKA.Vehicle();
+          voitureAutonome.position.copy(this.paths[i].current());
+          voitureAutonome.maxSpeed = 7;
+
+          const followPathBehavior = new YUKA.FollowPathBehavior(this.paths[i], 10);
+          voitureAutonome.steering.add(followPathBehavior);
+
+          const onPathBehavior = new YUKA.OnPathBehavior(this.paths[i]);
+          //onPathBehavior.radius = 2;
+          voitureAutonome.steering.add(onPathBehavior);
+
+          this.entityManager.add(voitureAutonome);
+
+          objet.matrixAutoUpdate = false;
+          voitureAutonome.setRenderComponent(objet, sync);
+
+          this.createVehicle();
+
+          this.numberItemLoaded += 1;
+        })
+    }
   }
 
   initPhysics() {
@@ -81,26 +331,10 @@ class Main {
     world.gravity.set(0, -10, 0);
     world.defaultContactMaterial.friction = 0;
 
-    /*
-    var gridHelper = new THREE.GridHelper(1000, 1000);
-    this.scene.add(gridHelper);
-
-    
-    const planeShape = new CANNON.Plane();
-    const planeBody = new CANNON.Body({ mass: 0 });
-    planeBody.addShape(planeShape);
-    planeBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-    this.world.addBody(planeBody);
-    game.helper.addVisual(planeBody, 'ground');
-    
-
-    this.scene.add(new THREE.AxesHelper());
-    */
-
     const groundMaterial = new CANNON.Material("groundMaterial");
     const wheelMaterial = new CANNON.Material("wheelMaterial");
     const wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
-      friction: 0.3,
+      friction: 0.5,
       restitution: 0,
       contactEquationStiffness: 1000
     });
@@ -108,7 +342,7 @@ class Main {
     // We must add the contact materials to the world
     world.addContactMaterial(wheelGroundContactMaterial);
 
-    const chassisShape = new CANNON.Box(new CANNON.Vec3(1, 0.5, 2));
+    const chassisShape = new CANNON.Box(new CANNON.Vec3(1.4, 0.7, 2.8));
     const chassisBody = new CANNON.Body({ mass: 150, material: groundMaterial });
     chassisBody.addShape(chassisShape);
     chassisBody.position.set(0, 4, 0);
@@ -161,7 +395,7 @@ class Main {
 
     const wheelBodies = [];
     vehicle.wheelInfos.forEach(function (wheel) {
-      const cylinderShape = new CANNON.Cylinder(wheel.radius, wheel.radius, wheel.radius / 2, 20);
+      const cylinderShape = new CANNON.Cylinder(wheel.radius, wheel.radius, wheel.radius, 20);
       const wheelBody = new CANNON.Body({ mass: 1, material: wheelMaterial });
       const q = new CANNON.Quaternion();
       q.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -Math.PI / 2);
@@ -219,7 +453,7 @@ class Main {
 
     const maxSteerVal = 0.5;
     const maxForce = 1000;
-    const brakeForce = 10;
+    const brakeForce = 20;
 
     const force = maxForce * forward;
     const steer = maxSteerVal * turn;
@@ -265,6 +499,13 @@ class Main {
 
     requestAnimationFrame(function () { game.animate(); });
 
+    if (this.numberItemLoaded != this.nbObject){
+      return;
+    }
+
+    const delta = this.time.update().getDelta();
+    this.entityManager.update(delta);
+
     const now = Date.now();
     if (this.lastTime === undefined) this.lastTime = now;
     const dt = (Date.now() - this.lastTime) / 1000.0;
@@ -273,6 +514,22 @@ class Main {
 
     this.world.step(this.fixedTimeStep, dt);
     this.helper.updateBodies(this.world);
+
+    //console.log(this.vehicle.chassisBody);
+
+    this.voiture.position.set(
+      this.vehicle.chassisBody.position.x,
+      this.vehicle.chassisBody.position.y - 1,
+      this.vehicle.chassisBody.position.z
+    )
+    this.voiture.quaternion.set(
+      this.vehicle.chassisBody.quaternion.x,
+      this.vehicle.chassisBody.quaternion.y,
+      this.vehicle.chassisBody.quaternion.z,
+      this.vehicle.chassisBody.quaternion.w
+    )
+
+    this.voiture.rotateY(Math.PI);
 
     this.updateDrive();
     this.updateCamera();
@@ -444,7 +701,7 @@ class CannonHelper {
 
   addVisual(body, name, castShadow = true, receiveShadow = true) {
     body.name = name;
-    if (this.currentMaterial === undefined) this.currentMaterial = new THREE.MeshLambertMaterial({ color: 0x525252 });
+    if (this.currentMaterial === undefined) this.currentMaterial = new THREE.MeshLambertMaterial({ color: 0x525252});//, visible: false });
     if (this.settings === undefined) {
       this.settings = {
         stepFrequency: 60,
@@ -498,13 +755,11 @@ class CannonHelper {
       let geometry;
       let v0, v1, v2;
 
-      console.log("shape type");
-      console.log(shape);
-
       switch (shape.type) {
 
         case CANNON.Shape.types.CYLINDER:
-          const cylinder_geometry = new THREE.CylinderGeometry(shape.radius, 1, 0.8);
+          console.log(shape);
+          const cylinder_geometry = new THREE.CylinderGeometry(shape.radiusTop, shape.radiusBottom, shape.radius);
           cylinder_geometry.rotateX(Math.PI / 2);
           mesh = new THREE.Mesh(cylinder_geometry, material);
           break;

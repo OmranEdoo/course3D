@@ -236,7 +236,7 @@ function init() {
       numberItemLoaded += 1;
     });
 
-  loadFullData('voiture.glb', new Vector3(0, 10, 0), new Vector3(1, 1, 1))
+  loadFullData('voiture.glb', new Vector3(0, 0, 0), new Vector3(1, 1, 1))
     .catch(error => {
       console.error(error);
     })
@@ -332,15 +332,15 @@ function animate() {
   else if (keys.s)
     speed = -0.2;
 
-  velocity += (speed - velocity) * 1.3;
+  velocity += (speed - velocity) * 0.3;
+  /*
+    // supposons que votre body s'appelle "myBody"
+    var impulse = new CANNON.Vec3(0, 0, velocity);
+    var point = new CANNON.Vec3(0, 0, 0);
+    voitureCannon.applyImpulse(impulse, point);
+  */
 
-  // supposons que votre body s'appelle "myBody"
-  var impulse = new CANNON.Vec3(0, 0, velocity);
-  var point = new CANNON.Vec3(0, 0, 0);
-  voitureCannon.applyImpulse(impulse, point);
-
-
-  //voiture.translateZ(velocity);
+  voiture.translateZ(velocity);
 
   //voitureCannon.z += 1;
 
@@ -350,17 +350,17 @@ function animate() {
   //console.log(voitureCannon.quaternion.y);
 
   if (keys.a) {
-    voitureCannon.quaternion.setFromAxisAngle(axisY, voitureCannon.quaternion.y + angle);
-    //voiture.rotateY(0.04);
+    //voitureCannon.quaternion.setFromAxisAngle(axisY, voitureCannon.quaternion.y + angle);
+    voiture.rotateY(0.04);
   }
   else if (keys.d) {
-    voitureCannon.quaternion.setFromAxisAngle(axisY, voitureCannon.quaternion.y - angle);
-    //voiture.rotateY(-0.04);
+    //voitureCannon.quaternion.setFromAxisAngle(axisY, voitureCannon.quaternion.y - angle);
+    voiture.rotateY(-0.04);
   }
 
   //detectCollision(voiture);
 
-  a.lerp(voitureCannon.position, 1.9);
+  a.lerp(voiture.position, 1.9);
   b.copy(goal.position);
 
   dir.copy(a).sub(b).normalize();
@@ -370,19 +370,19 @@ function animate() {
 
   //camera.position.lerp(temp, 0.2);
   camera.lookAt(voiture.position);
-
-  // Copy coordinates from Cannon to Three.js
-  voiture.position.set(
-    voitureCannon.position.x,
-    voitureCannon.position.y,
-    voitureCannon.position.z
-  )
-  voiture.quaternion.set(
-    voitureCannon.quaternion.x,
-    voitureCannon.quaternion.y,
-    voitureCannon.quaternion.z,
-    voitureCannon.quaternion.w
-  )
+  /*
+    // Copy coordinates from Cannon to Three.js
+    voiture.position.set(
+      voitureCannon.position.x,
+      voitureCannon.position.y,
+      voitureCannon.position.z
+    )
+    voiture.quaternion.set(
+      voitureCannon.quaternion.x,
+      voitureCannon.quaternion.y,
+      voitureCannon.quaternion.z,
+      voitureCannon.quaternion.w
+    )*/
   /*
   for (let i = 0; i < nbVoiture; i++) {
     voitures[i].position.set(

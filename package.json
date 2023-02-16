@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
+    "stats.js": "^0.17.0",
     "three": "^0.149.0",
     "yuka": "^0.7.8"
   }

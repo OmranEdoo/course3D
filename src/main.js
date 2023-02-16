@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import * as YUKA from 'yuka';
 import * as CANNON from 'cannon-es';
-import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
+//import * as STATS from 'stats.js'
+//import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Vector3 } from 'three';
 
@@ -10,7 +11,7 @@ class Main {
     console.log("constructor");
 
     this.container;
-		this.stats;
+		//this.stats = null;
 		this.camera;
 		this.scene;
 		this.renderer;
@@ -40,7 +41,6 @@ class Main {
 
     this.voiture = null;
     this.goal = null;
-    this.voitureCannon = null;
     this.circuit = null;
 
     this.entityManager = new YUKA.EntityManager();
@@ -96,10 +96,12 @@ class Main {
     const gltf = await this.modelLoader(fileName);
     //console.log(gltf.scene);
     let objet = gltf.scene.children[index];
-    //objet.matrixAutoUpdate = true;
+    objet.matrixAutoUpdate = true;
     objet.position.set(coord.x, coord.y, coord.z);
     objet.scale.set(scale.x, scale.y, scale.z);
 
+    console.log("objet");
+    console.log(objet.matrixWorld);
     this.scene.add(objet);
 
     return objet;
@@ -109,16 +111,22 @@ class Main {
     const gltf = await this.modelLoader(fileName);
 
     let objet = gltf.scene;
-    //objet.matrixAutoUpdate = true;
+    objet.matrixAutoUpdate = true;
     objet.position.set(coord.x, coord.y, coord.z);
     objet.scale.set(scale.x, scale.y, scale.z);
 
+    console.log("objet");
+    console.log(objet.matrixWorld);
     this.scene.add(objet);
 
     return objet;
   }
 
   init() {
+    const game = this;
+
+    this.loader = new GLTFLoader().setPath('assets/models/');
+
     // Initialisation des éléments principaux
     this.camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 2000 );
 		this.camera.position.set( 10, 10, 10 );
@@ -131,6 +139,9 @@ class Main {
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
 		this.renderer.shadowMap.enabled = true;
 		this.container.appendChild( this.renderer.domElement );
+
+    this.helper = new CannonHelper(this.scene);
+    this.helper.addLights(this.renderer);
 
     window.addEventListener( 'resize', function(){ game.onWindowResize(); }, false );
 
@@ -155,11 +166,11 @@ class Main {
     this.scene.add(new THREE.AxesHelper());
 
     document.body.appendChild(this.renderer.domElement);
-
+/*
     // Contrôle de la caméra avec la souris et les flèches directionnelles
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.listenToKeyEvents(window); // optional
-
+*/
     // Lumières
     this.ambientLight = new THREE.AmbientLight(0x333333);
     this.scene.add(this.ambientLight);
@@ -245,12 +256,15 @@ class Main {
     this.scene.add(this.lines3);
     this.scene.add(this.lines4);
 
-    this.loader = new GLTFLoader().setPath('assets/models/');
+    console.log("lines4");
+    console.log(this.lines4.matrixWorld);
 
+
+    /*
     if (this.debug){
 			this.stats = new Stats();
 			this.container.appendChild( this.stats.dom );
-		}
+		}*/
 
     this.joystick = new JoyStick({
 			game:this,
@@ -276,13 +290,13 @@ class Main {
         console.error(error);
       })
       .then((objet) => {
-        this.voiture = objet;
+        this.voiture = objet;/*
         this.voitureCannon = new CANNON.Body({ mass: 1 });
         this.voitureCannon.addShape(this.cubeShape);
         this.voitureCannon.position.x = this.voiture.position.x;
         this.voitureCannon.position.y = this.voiture.position.y;
         this.voitureCannon.position.z = this.voiture.position.z;
-        this.world.addBody(this.voitureCannon);
+        this.world.addBody(this.voitureCannon);*/
 
         this.numberItemLoaded += 1;
       });
@@ -306,8 +320,8 @@ class Main {
 
           this.entityManager.add(vehicle);
 
-          objet.matrixAutoUpdate = false;
-          vehicle.setRenderComponent(objet, sync);
+          //objet.matrixAutoUpdate = false;
+          //vehicle.setRenderComponent(objet, sync);
 
           let cubeBody = new CANNON.Body({ mass: 1 })
           cubeBody.addShape(this.cubeShape)
@@ -321,7 +335,7 @@ class Main {
           this.voituresCannon.push(cubeBody);
         })
     }
-
+    /*
     // Listener des touches "qzsd" (wasd en qwerty)
     document.body.addEventListener('keydown', function (e) {
       var key = e.code.replace('Key', '').toLowerCase();
@@ -333,7 +347,7 @@ class Main {
       var key = e.code.replace('Key', '').toLowerCase();
       if (this.keys[key] !== undefined)
         this.keys[key] = false;
-    });
+    });*/
 
     this.initPhysics();
   }
@@ -364,11 +378,13 @@ class Main {
 		const chassisBody = new CANNON.Body({ mass: 150, material: groundMaterial });
 		chassisBody.addShape(chassisShape);
 		chassisBody.position.set(0, 4, 0);
+		this.helper.addVisual(chassisBody, 'car');
 		
 		this.followCam = new THREE.Object3D();
 		this.followCam.position.copy(this.camera.position);
 		this.scene.add(this.followCam);
 		this.followCam.parent = chassisBody.threemesh;
+    this.helper.shadowTarget = chassisBody.threemesh;
 
 		const options = {
 			radius: 0.5,
@@ -417,12 +433,12 @@ class Main {
 			q.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2);
 			wheelBody.addShape(cylinderShape, new CANNON.Vec3(), q);
 			wheelBodies.push(wheelBody);
+      game.helper.addVisual(wheelBody, 'wheel');
 		});
 
 		// Update wheels
 		world.addEventListener('postStep', function(){
 			let index = 0;
-      //console.log(wheelBodies[index])
 			game.vehicle.wheelInfos.forEach(function(wheel){
             	game.vehicle.updateWheelTransform(index);
                 const t = wheel.worldTransform;
@@ -456,6 +472,7 @@ class Main {
 		hfBody.position.set(-sizeX * hfShape.elementSize / 2, -4, sizeY * hfShape.elementSize / 2);
 		hfBody.quaternion.setFromAxisAngle( new CANNON.Vec3(1,0,0), -Math.PI/2);
 		world.addBody(hfBody);
+    this.helper.addVisual(hfBody, 'landscape');
 		
 		this.animate();
 	}
@@ -501,16 +518,25 @@ class Main {
 	}
 
 	updateCamera(){
-		//this.camera.position.lerp(this.followCam.getWorldPosition(new THREE.Vector3()), 0.05);
+		this.camera.position.lerp(this.followCam.getWorldPosition(new THREE.Vector3()), 0.05);
 		this.camera.lookAt(this.vehicle.chassisBody.position);
+    if (this.helper.sun!=undefined){
+			this.helper.sun.position.copy( this.camera.position );
+			this.helper.sun.position.y += 10;
+		}
 	}
 
 
   animate() {
 
+    console.log("animate");
+
     const game = this;
 
     requestAnimationFrame(function(){game.animate();});
+
+    if (this.nbItems != this.numberItemLoaded)
+      return;
 
     const now = Date.now();
 		if (this.lastTime===undefined) this.lastTime = now;
@@ -519,21 +545,17 @@ class Main {
 		this.lastTime = now;
 		
 		this.world.step(this.fixedTimeStep, dt);
+    this.helper.updateBodies(this.world);
 		
 		this.updateDrive();
 		this.updateCamera();
-		
-    if (this.numberItemLoaded < 5) {
-      return;
-    }
 
     const delta = this.time.update().getDelta();
     this.entityManager.update(delta);
-    //console.log(delta);
 
-    //this.world.step(delta)
+    this.renderer.render(this.scene, this.camera);
 
-
+    /*
     this.speed = 0.0;
 
     if (this.keys.w)
@@ -544,42 +566,44 @@ class Main {
     this.velocity += (this.speed - this.velocity) * .3;
 
     // supposons que votre body s'appelle "myBody"
-    var impulse = new CANNON.Vec3(0, 0, this.velocity);
-    var point = new CANNON.Vec3(0, 0, 0);
-    this.voitureCannon.applyImpulse(impulse, point);
+    //var impulse = new CANNON.Vec3(0, 0, this.velocity);
+    //var point = new CANNON.Vec3(0, 0, 0);
+    //this.voitureCannon.applyImpulse(impulse, point);
 
     if (this.keys.a) {
-      this.voitureCannon.quaternion.setFromAxisAngle(axisY, this.voitureCannon.quaternion.y + angle);
+      this.vehicle.quaternion.setFromAxisAngle(axisY, this.vehicle.quaternion.y + angle);
       //voiture.rotateY(0.04);
     }
     else if (this.keys.d) {
-      this.voitureCannon.quaternion.setFromAxisAngle(axisY, this.voitureCannon.quaternion.y - angle);
+      this.vehicle.quaternion.setFromAxisAngle(axisY, this.vehicle.quaternion.y - angle);
       //voiture.rotateY(-0.04);
-    }
-
-    this.a.lerp(this.voitureCannon.position, 1.9);
+    }*/
+    /*
+    this.a.lerp(this.vehicle.position, 1.9);
     this.b.copy(this.goal.position);
 
     this.dir.copy(this.a).sub(this.b).normalize();
     const dis = this.a.distanceTo(this.b) - this.coronaSafetyDistance;
-    this.goal.position.addScaledVector(this.dir, dis);
+    this.goal.position.addScaledVector(this.dir, dis);*/
+
     //temp.setFromMatrixPosition(goal.matrixWorld);
 
     //camera.position.lerp(temp, 0.2);
     //this.camera.lookAt(this.voiture.position);
 
+    /*
     // Copy coordinates from Cannon to Three.js
     this.voiture.position.set(
-      this.voitureCannon.position.x,
-      this.voitureCannon.position.y,
-      this.voitureCannon.position.z
+      this.vehicle.position.x,
+      this.vehicle.position.y,
+      this.vehicle.position.z
     )
     this.voiture.quaternion.set(
-      this.voitureCannon.quaternion.x,
-      this.voitureCannon.quaternion.y,
-      this.voitureCannon.quaternion.z,
-      this.voitureCannon.quaternion.w
-    )
+      this.vehicle.quaternion.x,
+      this.vehicle.quaternion.y,
+      this.vehicle.quaternion.z,
+      this.vehicle.quaternion.w
+    )*/
     /*
     for (let i = 0; i < nbVoiture; i++) {
       voitures[i].position.set(
@@ -597,9 +621,7 @@ class Main {
 
     //this.world.fixedStep();
 
-    this.renderer.render(this.scene, this.camera);
-
-    if (this.stats!=undefined) this.stats.update();
+    //if (this.stats!=undefined) this.stats.update();
   }
 }
 
@@ -689,6 +711,273 @@ class JoyStick{
 		
 		this.onMove.call(this.game, 0, 0);
 	}
+}
+
+
+class CannonHelper{
+  constructor(scene){
+      this.scene = scene;
+  }
+  
+  addLights(renderer){
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap; // default THREE.PCFShadowMap
+
+      // LIGHTS
+      const ambient = new THREE.AmbientLight( 0x888888 );
+      this.scene.add( ambient );
+
+      const light = new THREE.DirectionalLight( 0xdddddd );
+      light.position.set( 3, 10, 4 );
+      light.target.position.set( 0, 0, 0 );
+
+      light.castShadow = true;
+
+      const lightSize = 10;
+      light.shadow.camera.near = 1;
+      light.shadow.camera.far = 50;
+      light.shadow.camera.left = light.shadow.camera.bottom = -lightSize;
+      light.shadow.camera.right = light.shadow.camera.top = lightSize;
+
+      light.shadow.mapSize.width = 1024;
+      light.shadow.mapSize.height = 1024;
+
+      this.sun = light;
+      this.scene.add(light);    
+  }
+  
+  set shadowTarget(obj){
+      if (this.sun!==undefined) this.sun.target = obj;    
+  }
+  
+  createCannonTrimesh(geometry){
+  if (!geometry.isBufferGeometry) return null;
+  
+  const posAttr = geometry.attributes.position;
+  const vertices = geometry.attributes.position.array;
+  let indices = [];
+  for(let i=0; i<posAttr.count; i++){
+    indices.push(i);
+  }
+  
+  return new CANNON.Trimesh(vertices, indices);
+}
+
+createCannonConvex(geometry){
+  if (!geometry.isBufferGeometry) return null;
+  
+  const posAttr = geometry.attributes.position;
+  const floats = geometry.attributes.position.array;
+  const vertices = [];
+  const faces = [];
+  let face = [];
+  let index = 0;
+  for(let i=0; i<posAttr.count; i+=3){
+    vertices.push( new CANNON.Vec3(floats[i], floats[i+1], floats[i+2]) );
+    face.push(index++);
+    if (face.length==3){
+      faces.push(face);
+      face = [];
+    }
+  }
+  
+  return new CANNON.ConvexPolyhedron(vertices, faces);
+}
+  
+  addVisual(body, name, castShadow=true, receiveShadow=true){
+  body.name = name;
+  if (this.currentMaterial===undefined) this.currentMaterial = new THREE.MeshLambertMaterial({color:0x888888});
+  if (this.settings===undefined){
+    this.settings = {
+      stepFrequency: 60,
+      quatNormalizeSkip: 2,
+      quatNormalizeFast: true,
+      gx: 0,
+      gy: 0,
+      gz: 0,
+      iterations: 3,
+      tolerance: 0.0001,
+      k: 1e6,
+      d: 3,
+      scene: 0,
+      paused: false,
+      rendermode: "solid",
+      constraints: false,
+      contacts: false,  // Contact points
+      cm2contact: false, // center of mass to contact points
+      normals: false, // contact normals
+      axes: false, // "local" frame axes
+      particleSize: 0.1,
+      shadows: false,
+      aabbs: false,
+      profiling: false,
+      maxSubSteps:3
+    }
+    this.particleGeo = new THREE.SphereGeometry( 1, 16, 8 );
+    this.particleMaterial = new THREE.MeshLambertMaterial( { color: 0xff0000 } );
+  }
+  // What geometry should be used?
+  let mesh;
+  if(body instanceof CANNON.Body) mesh = this.shape2Mesh(body, castShadow, receiveShadow);
+
+  if(mesh) {
+    // Add body
+    body.threemesh = mesh;
+          mesh.castShadow = castShadow;
+          mesh.receiveShadow = receiveShadow;
+    this.scene.add(mesh);
+  }
+}
+
+shape2Mesh(body, castShadow, receiveShadow){
+  const obj = new THREE.Object3D();
+  const material = this.currentMaterial;
+  const game = this;
+  let index = 0;
+  
+  body.shapes.forEach (function(shape){
+    let mesh;
+    let geometry;
+    let v0, v1, v2;
+
+    switch(shape.type){
+
+    case CANNON.Shape.types.SPHERE:
+      const sphere_geometry = new THREE.SphereGeometry( shape.radius, 8, 8);
+      mesh = new THREE.Mesh( sphere_geometry, material );
+      break;
+
+    case CANNON.Shape.types.PARTICLE:
+      mesh = new THREE.Mesh( game.particleGeo, game.particleMaterial );
+      const s = this.settings;
+      mesh.scale.set(s.particleSize,s.particleSize,s.particleSize);
+      break;
+
+    case CANNON.Shape.types.PLANE:
+      geometry = new THREE.PlaneGeometry(10, 10, 4, 4);
+      mesh = new THREE.Object3D();
+      const submesh = new THREE.Object3D();
+      const ground = new THREE.Mesh( geometry, material );
+      ground.scale.set(100, 100, 100);
+      submesh.add(ground);
+
+      mesh.add(submesh);
+      break;
+
+    case CANNON.Shape.types.BOX:
+      const box_geometry = new THREE.BoxGeometry(  shape.halfExtents.x*2,
+                            shape.halfExtents.y*2,
+                            shape.halfExtents.z*2 );
+      mesh = new THREE.Mesh( box_geometry, material );
+      break;
+
+    case CANNON.Shape.types.CONVEXPOLYHEDRON:
+      const geo = new THREE.Geometry();
+
+      // Add vertices
+      shape.vertices.forEach(function(v){
+        geo.vertices.push(new THREE.Vector3(v.x, v.y, v.z));
+      });
+
+      shape.faces.forEach(function(face){
+        // add triangles
+        const a = face[0];
+        for (let j = 1; j < face.length - 1; j++) {
+          const b = face[j];
+          const c = face[j + 1];
+          geo.faces.push(new THREE.Face3(a, b, c));
+        }
+      });
+      geo.computeBoundingSphere();
+      geo.computeFaceNormals();
+      mesh = new THREE.Mesh( geo, material );
+      break;
+
+    case CANNON.Shape.types.HEIGHTFIELD:
+      geometry = new THREE.Geometry();
+
+      v0 = new CANNON.Vec3();
+      v1 = new CANNON.Vec3();
+      v2 = new CANNON.Vec3();
+      for (let xi = 0; xi < shape.data.length - 1; xi++) {
+        for (let yi = 0; yi < shape.data[xi].length - 1; yi++) {
+          for (let k = 0; k < 2; k++) {
+            shape.getConvexTrianglePillar(xi, yi, k===0);
+            v0.copy(shape.pillarConvex.vertices[0]);
+            v1.copy(shape.pillarConvex.vertices[1]);
+            v2.copy(shape.pillarConvex.vertices[2]);
+            v0.vadd(shape.pillarOffset, v0);
+            v1.vadd(shape.pillarOffset, v1);
+            v2.vadd(shape.pillarOffset, v2);
+            geometry.vertices.push(
+              new THREE.Vector3(v0.x, v0.y, v0.z),
+              new THREE.Vector3(v1.x, v1.y, v1.z),
+              new THREE.Vector3(v2.x, v2.y, v2.z)
+            );
+            var i = geometry.vertices.length - 3;
+            geometry.faces.push(new THREE.Face3(i, i+1, i+2));
+          }
+        }
+      }
+      geometry.computeBoundingSphere();
+      geometry.computeFaceNormals();
+      mesh = new THREE.Mesh(geometry, material);
+      break;
+
+    case CANNON.Shape.types.TRIMESH:
+      geometry = new THREE.Geometry();
+
+      v0 = new CANNON.Vec3();
+      v1 = new CANNON.Vec3();
+      v2 = new CANNON.Vec3();
+      for (let i = 0; i < shape.indices.length / 3; i++) {
+        shape.getTriangleVertices(i, v0, v1, v2);
+        geometry.vertices.push(
+          new THREE.Vector3(v0.x, v0.y, v0.z),
+          new THREE.Vector3(v1.x, v1.y, v1.z),
+          new THREE.Vector3(v2.x, v2.y, v2.z)
+        );
+        var j = geometry.vertices.length - 3;
+        geometry.faces.push(new THREE.Face3(j, j+1, j+2));
+      }
+      geometry.computeBoundingSphere();
+      geometry.computeFaceNormals();
+      mesh = new THREE.Mesh(geometry, MutationRecordaterial);
+      break;
+
+    default:
+      throw "Visual type not recognized: "+shape.type;
+    }
+
+    mesh.receiveShadow = receiveShadow;
+    mesh.castShadow = castShadow;
+          
+          mesh.traverse( function(child){
+              if (child.isMesh){
+                  child.castShadow = castShadow;
+        child.receiveShadow = receiveShadow;
+              }
+          });
+
+    var o = body.shapeOffsets[index];
+    var q = body.shapeOrientations[index++];
+    mesh.position.set(o.x, o.y, o.z);
+    mesh.quaternion.set(q.x, q.y, q.z, q.w);
+
+    obj.add(mesh);
+  });
+
+  return obj;
+}
+  
+  updateBodies(world){
+      world.bodies.forEach( function(body){
+          if ( body.threemesh != undefined){
+              body.threemesh.position.copy(body.position);
+              body.threemesh.quaternion.copy(body.quaternion);
+          }
+      });
+  }
 }
 
 new Main();

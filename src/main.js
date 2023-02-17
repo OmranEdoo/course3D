@@ -78,10 +78,10 @@ class Main {
       contactEquationStiffness: 1000
     });
 
-    const chassisShape = new CANNON.Box(new CANNON.Vec3(1.4, 0.7, 2.8));
+    const chassisShape = new CANNON.Box(new CANNON.Vec3(1, 0.5, 2));
     const chassisBody = new CANNON.Body({ mass: 150, material: groundMaterial });
     chassisBody.addShape(chassisShape);
-    chassisBody.position.set(10, 4, 0);
+    chassisBody.position.set(10 * this.numberItemLoaded, 4, 0);
     this.helper.addVisual(chassisBody, 'car');
 
     const options = {
@@ -155,6 +155,9 @@ class Main {
     this.carsInitPositions = [
       new THREE.Vector3(5, 0, 0), new THREE.Vector3(-5, 0, 0), new THREE.Vector3(5, 0, 5)
     ];
+    this.turns = [
+      0.2, -0.2, 0
+    ];
   }
 
 
@@ -185,17 +188,61 @@ class Main {
     this.nbVoiture = 2;
     this.loader = new GLTFLoader().setPath('assets/models/');
     this.entityManager = new YUKA.EntityManager();
-    
+
     this.initCars();
 
     this.initPhysics();
 
-    function sync(entity, renderComponent) {
-      //console.log("____test____");
-      renderComponent.matrix.copy(entity.worldMatrix);
-    }
+    this.intersections = [];
+    const sizeNb = 100;
+    this.pasX = null;
+    this.pasY = null;
 
-    this.loadFullData('voiture.glb', new Vector3(0, 0, 0), new Vector3(1.5, 1.5, 1.5))
+    this.loadFullData('montmartre.glb', new Vector3(0, -150, 0), new Vector3(1, 1, 1))
+      .catch(error => {
+        console.error(error);
+      })
+      .then((objet) => {
+        console.log("________test__________")
+        const boundingBox = objet.children[0].geometry.boundingBox;
+        this.pasX = Math.abs(boundingBox.min.x - boundingBox.max.x);
+        this.pasY = Math.abs(boundingBox.min.z - boundingBox.max.z);
+
+        let raycasterPosition = new Vector3(boundingBox.min.x, 0, boundingBox.min.z);
+        let raycasterDirection = new Vector3(0, 1, 0);
+        const raycaster = new THREE.Raycaster(raycasterPosition, raycasterDirection);
+        for (let i = 0; i < sizeNb; i++) {
+          raycasterPosition.z += this.pasY / sizeNb;
+          this.intersections.push([]);
+          for (let j = 0; j < 100; j++) {
+            raycasterPosition.x += this.pasX / sizeNb;
+            raycaster.set(raycasterPosition, raycasterDirection);
+
+            if (raycaster.intersectObject(objet).length) {
+              this.intersections[i].push(raycaster.intersectObject(objet)[0].distance);
+            } else {
+              this.intersections[i].push(0);
+            }
+          }
+        }
+
+        console.log(this.intersections);
+        var testHeightField = new CANNON.Heightfield(this.intersections, {
+          elementSize: 100 / this.pasX
+        });
+        var testHeightShape = new CANNON.Body({ mass: 0 });
+        testHeightShape.addShape(testHeightField);
+        testHeightShape.position.set(this.pasX * testHeightField.elementSize / 2, -4, this.pasY * testHeightField.elementSize / 2);
+        testHeightShape.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        world.addBody(testHeightShape);
+        this.helper.addVisual(testHeightShape, 'test');
+
+        //this.numberItemLoaded += 1;
+      })
+
+
+
+    this.loadFullData('voiture.glb', new Vector3(0, 0, 0), new Vector3(1, 1, 1))
       .catch(error => {
         console.error(error);
       })
@@ -211,7 +258,7 @@ class Main {
     });
 
     for (let i = 0; i < this.nbVoiture; i++) {
-      this.loadFullData('voiture.glb', this.carsInitPositions[i], new Vector3(1.5, 1.5, 1.5))
+      this.loadFullData('voiture.glb', this.carsInitPositions[i], new Vector3(1, 1, 1))
         .catch(error => {
           console.error(error);
         })
@@ -239,7 +286,7 @@ class Main {
     const groundMaterial = new CANNON.Material("groundMaterial");
     const wheelMaterial = new CANNON.Material("wheelMaterial");
     const wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
-      friction: 0.5,
+      friction: 0.3,
       restitution: 0,
       contactEquationStiffness: 1000
     });
@@ -247,7 +294,7 @@ class Main {
     // We must add the contact materials to the world
     world.addContactMaterial(wheelGroundContactMaterial);
 
-    const chassisShape = new CANNON.Box(new CANNON.Vec3(1.4, 0.7, 2.8));
+    const chassisShape = new CANNON.Box(new CANNON.Vec3(1, 0.5, 2));
     const chassisBody = new CANNON.Body({ mass: 150, material: groundMaterial });
     chassisBody.addShape(chassisShape);
     chassisBody.position.set(0, 4, 0);
@@ -303,7 +350,7 @@ class Main {
       const cylinderShape = new CANNON.Cylinder(wheel.radius, wheel.radius, wheel.radius, 20);
       const wheelBody = new CANNON.Body({ mass: 1, material: wheelMaterial });
       const q = new CANNON.Quaternion();
-      q.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -Math.PI / 2);
+      q.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2);
       wheelBody.addShape(cylinderShape, new CANNON.Vec3(), q);
       wheelBodies.push(wheelBody);
       game.helper.addVisual(wheelBody, 'wheel');
@@ -335,6 +382,7 @@ class Main {
         matrix[i].push(height);
       }
     }
+
 
     var hfShape = new CANNON.Heightfield(matrix, {
       elementSize: 100 / sizeX
@@ -378,8 +426,8 @@ class Main {
       vehicle.setBrake(brakeForce, 3);
     }
 
-    this.vehicle.setSteeringValue(steer, 0);
-    this.vehicle.setSteeringValue(steer, 1);
+    vehicle.setSteeringValue(steer, 0);
+    vehicle.setSteeringValue(steer, 1);
   }
 
   onWindowResize() {
@@ -404,12 +452,9 @@ class Main {
 
     requestAnimationFrame(function () { game.animate(); });
 
-    if (this.numberItemLoaded != this.nbObject){
+    if (this.numberItemLoaded != this.nbObject) {
       return;
     }
-
-    const delta = this.time.update().getDelta();
-    this.entityManager.update(delta);
 
     const now = Date.now();
     if (this.lastTime === undefined) this.lastTime = now;
@@ -437,9 +482,10 @@ class Main {
     this.voiture.rotateY(Math.PI);
 
     this.updateDrive();
+
     let index = 0;
     this.carsCannon.forEach(car => {
-      this.updateDrive(car, 1, 0.2);
+      this.updateDrive(car, 0.5, this.turns[index]);
       this.cars[index].position.set(
         car.chassisBody.position.x,
         car.chassisBody.position.y - 1,
@@ -454,6 +500,7 @@ class Main {
       this.cars[index].rotateY(Math.PI);
       index += 1;
     });
+
     this.updateCamera();
 
     this.renderer.render(this.scene, this.camera);
@@ -623,7 +670,7 @@ class CannonHelper {
 
   addVisual(body, name, castShadow = true, receiveShadow = true) {
     body.name = name;
-    if (this.currentMaterial === undefined) this.currentMaterial = new THREE.MeshLambertMaterial({ color: 0x525252});//, visible: false });
+    if (this.currentMaterial === undefined) this.currentMaterial = new THREE.MeshLambertMaterial({ color: 0x525252, visible: false });
     if (this.settings === undefined) {
       this.settings = {
         stepFrequency: 60,
@@ -680,7 +727,6 @@ class CannonHelper {
       switch (shape.type) {
 
         case CANNON.Shape.types.CYLINDER:
-          console.log(shape);
           const cylinder_geometry = new THREE.CylinderGeometry(shape.radiusTop, shape.radiusBottom, shape.radius);
           cylinder_geometry.rotateX(Math.PI / 2);
           mesh = new THREE.Mesh(cylinder_geometry, material);

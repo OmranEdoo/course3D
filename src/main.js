@@ -73,7 +73,7 @@ class Main {
     const groundMaterial = new CANNON.Material("groundMaterial");
     const wheelMaterial = new CANNON.Material("wheelMaterial");
     const wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
-      friction: 1.0,
+      friction: 0.5,
       restitution: 0,
       contactEquationStiffness: 1000
     });
@@ -146,96 +146,15 @@ class Main {
       });
     });
 
+    this.carsCannon.push(vehicle);
   }
 
-  initYuka() {
-    this.voituresPositions = [
-      new Vector3(5, 0, 0),
-      new Vector3(10, 0, 0),
-      new Vector3(-5, 0, 0),
-      new Vector3(-10, 0, 0)
+  initCars() {
+    this.cars = [];
+    this.carsCannon = [];
+    this.carsInitPositions = [
+      new THREE.Vector3(5, 0, 0), new THREE.Vector3(-5, 0, 0), new THREE.Vector3(5, 0, 5)
     ];
-
-    this.paths = [];
-
-    const path1 = new YUKA.Path();
-    path1.add(new YUKA.Vector3(50, 0, 0));
-    path1.add(new YUKA.Vector3(0, 0, 0));
-    path1.add(new YUKA.Vector3(0, 0, 50));
-
-    const path2 = new YUKA.Path();
-    path2.add(new YUKA.Vector3(-50, 0, -25));
-    path2.add(new YUKA.Vector3(20, 0, 10));
-    path2.add(new YUKA.Vector3(40, 0, 40));
-
-    const path3 = new YUKA.Path();
-    path3.add(new YUKA.Vector3(40, 0, -40));
-    path3.add(new YUKA.Vector3(-20, 0, -10));
-    path3.add(new YUKA.Vector3(5, 0, 40));
-
-    const path4 = new YUKA.Path();
-    path4.add(new YUKA.Vector3(25, 0, 25));
-    path4.add(new YUKA.Vector3(-25, 0, 25));
-    path4.add(new YUKA.Vector3(-25, 0, -25));
-    path4.add(new YUKA.Vector3(25, 0, -25));
-
-
-    path1.loop = true;
-    path2.loop = true;
-    path3.loop = true;
-    path4.loop = true;
-
-    this.paths.push(path1);
-    this.paths.push(path2);
-    this.paths.push(path3);
-    this.paths.push(path4);
-
-    const positions1 = [];
-    const positions2 = [];
-    const positions3 = [];
-    const positions4 = [];
-
-    for (let i = 0; i < path1._waypoints.length; i++) {
-      const point = path1._waypoints[i];
-      positions1.push(point.x, point.y, point.z);
-    }
-    for (let i = 0; i < path2._waypoints.length; i++) {
-      const point = path2._waypoints[i];
-      positions2.push(point.x, point.y, point.z);
-    }
-    for (let i = 0; i < path3._waypoints.length; i++) {
-      const point = path3._waypoints[i];
-      positions3.push(point.x, point.y, point.z);
-    }
-    for (let i = 0; i < path4._waypoints.length; i++) {
-      const point = path4._waypoints[i];
-      positions4.push(point.x, point.y, point.z);
-    }
-
-    const positions = [positions1, positions2, positions2, positions4]
-
-    const lineGeometry1 = new THREE.BufferGeometry();
-    const lineGeometry2 = new THREE.BufferGeometry();
-    const lineGeometry3 = new THREE.BufferGeometry();
-    const lineGeometry4 = new THREE.BufferGeometry();
-
-    const lineGeometrys = [lineGeometry1, lineGeometry2, lineGeometry3, lineGeometry4]
-
-    for (let i = 0; i < this.nbVoiture; i++) {
-      lineGeometrys[i].setAttribute('position', new THREE.Float32BufferAttribute(positions[i], 3));
-    }
-
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xFFFFFF });
-
-    const lines1 = new THREE.LineLoop(lineGeometry1, lineMaterial);
-    const lines2 = new THREE.LineLoop(lineGeometry2, lineMaterial);
-    const lines3 = new THREE.LineLoop(lineGeometry3, lineMaterial);
-    const lines4 = new THREE.LineLoop(lineGeometry4, lineMaterial);
-
-    this.scene.add(lines1);
-    this.scene.add(lines2);
-    this.scene.add(lines3);
-    this.scene.add(lines4);
   }
 
 
@@ -266,9 +185,9 @@ class Main {
     this.nbVoiture = 2;
     this.loader = new GLTFLoader().setPath('assets/models/');
     this.entityManager = new YUKA.EntityManager();
-
-    this.initYuka();
     
+    this.initCars();
+
     this.initPhysics();
 
     function sync(entity, renderComponent) {
@@ -292,26 +211,12 @@ class Main {
     });
 
     for (let i = 0; i < this.nbVoiture; i++) {
-      this.loadFullData('voiture.glb', this.voituresPositions[i], new Vector3(1, 1, 1))
+      this.loadFullData('voiture.glb', this.carsInitPositions[i], new Vector3(1.5, 1.5, 1.5))
         .catch(error => {
           console.error(error);
         })
         .then((objet) => {
-          const voitureAutonome = new YUKA.Vehicle();
-          voitureAutonome.position.copy(this.paths[i].current());
-          voitureAutonome.maxSpeed = 7;
-
-          const followPathBehavior = new YUKA.FollowPathBehavior(this.paths[i], 10);
-          voitureAutonome.steering.add(followPathBehavior);
-
-          const onPathBehavior = new YUKA.OnPathBehavior(this.paths[i]);
-          //onPathBehavior.radius = 2;
-          voitureAutonome.steering.add(onPathBehavior);
-
-          this.entityManager.add(voitureAutonome);
-
-          objet.matrixAutoUpdate = false;
-          voitureAutonome.setRenderComponent(objet, sync);
+          this.cars.push(objet);
 
           this.createVehicle();
 
@@ -449,7 +354,7 @@ class Main {
     this.js.turn = -turn;
   }
 
-  updateDrive(forward = this.js.forward, turn = this.js.turn) {
+  updateDrive(vehicle = this.vehicle, forward = this.js.forward, turn = this.js.turn) {
 
     const maxSteerVal = 0.5;
     const maxForce = 1000;
@@ -459,18 +364,18 @@ class Main {
     const steer = maxSteerVal * turn;
 
     if (forward != 0) {
-      this.vehicle.setBrake(0, 0);
-      this.vehicle.setBrake(0, 1);
-      this.vehicle.setBrake(0, 2);
-      this.vehicle.setBrake(0, 3);
+      vehicle.setBrake(0, 0);
+      vehicle.setBrake(0, 1);
+      vehicle.setBrake(0, 2);
+      vehicle.setBrake(0, 3);
 
-      this.vehicle.applyEngineForce(force, 2);
-      this.vehicle.applyEngineForce(force, 3);
+      vehicle.applyEngineForce(force, 2);
+      vehicle.applyEngineForce(force, 3);
     } else {
-      this.vehicle.setBrake(brakeForce, 0);
-      this.vehicle.setBrake(brakeForce, 1);
-      this.vehicle.setBrake(brakeForce, 2);
-      this.vehicle.setBrake(brakeForce, 3);
+      vehicle.setBrake(brakeForce, 0);
+      vehicle.setBrake(brakeForce, 1);
+      vehicle.setBrake(brakeForce, 2);
+      vehicle.setBrake(brakeForce, 3);
     }
 
     this.vehicle.setSteeringValue(steer, 0);
@@ -532,6 +437,23 @@ class Main {
     this.voiture.rotateY(Math.PI);
 
     this.updateDrive();
+    let index = 0;
+    this.carsCannon.forEach(car => {
+      this.updateDrive(car, 1, 0.2);
+      this.cars[index].position.set(
+        car.chassisBody.position.x,
+        car.chassisBody.position.y - 1,
+        car.chassisBody.position.z
+      )
+      this.cars[index].quaternion.set(
+        car.chassisBody.quaternion.x,
+        car.chassisBody.quaternion.y,
+        car.chassisBody.quaternion.z,
+        car.chassisBody.quaternion.w
+      )
+      this.cars[index].rotateY(Math.PI);
+      index += 1;
+    });
     this.updateCamera();
 
     this.renderer.render(this.scene, this.camera);
